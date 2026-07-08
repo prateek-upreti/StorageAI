@@ -1,7 +1,10 @@
 use std::path::Path;
 
+use chrono::Utc;
+
 use crate::{
     constants::APP_VERSION,
+    database::repository::Repository,
     scanner::scan_directory,
 };
 
@@ -26,29 +29,60 @@ pub async fn select_folder(
     Ok(folder.map(|path| path.to_string()))
 }
 
-/// Scans a directory and returns scan statistics.
+/// Scans a directory, stores the results in SQLite,
+/// and returns scan statistics.
 #[tauri::command]
-pub fn start_scan(path: String) -> Result<(u64, u64, u64, u128, u64), String> {
+pub fn start_scan(
+    path: String,
+) -> Result<(u64, u64, u64, u128, u64), String> {
     println!("Starting scan...");
     println!("Path: {}", path);
 
-    let result = std::thread::spawn(move || {
-        scan_directory(
-            Path::new(&path),
-            |_progress| {
-                // We'll emit progress in the next step.
-            },
-        )
-    })
-    .join()
-    .map_err(|_| "Scanner thread panicked".to_string())?
+    let started_at = Utc::now().to_rfc3339();
+
+    let mut repository =
+        Repository::new().map_err(|e| e.to_string())?;
+
+    let session_id = repository
+        .insert_scan_session(&path, &started_at)
+        .map_err(|e| e.to_string())?;
+
+    let result = scan_directory(
+        Path::new(&path),
+        |_progress| {
+            // Progress events will be emitted later.
+        },
+    )
     .map_err(|e| e.to_string())?;
+
+    repository
+        .bulk_insert_file_records(
+            session_id,
+            &result.records,
+        )
+        .map_err(|e| e.to_string())?;
+
+    let finished_at = Utc::now().to_rfc3339();
+
+    repository
+        .finish_scan_session(
+            session_id,
+            &finished_at,
+            result.files,
+            result.folders,
+            result.total_size,
+            result.skipped_folders,
+            result.elapsed_ms,
+        )
+        .map_err(|e| e.to_string())?;
 
     println!();
     println!("========== Scan Finished ==========");
+    println!("Session ID  : {}", session_id);
     println!("Files       : {}", result.files);
     println!("Folders     : {}", result.folders);
     println!("Skipped     : {}", result.skipped_folders);
+    println!("Stored      : {}", result.records.len());
     println!("Total Size  : {} bytes", result.total_size);
     println!("Elapsed Time: {} ms", result.elapsed_ms);
     println!("==================================");

@@ -2,6 +2,7 @@ mod commands;
 mod constants;
 mod database;
 mod scanner;
+mod models;
 
 use commands::{
     app_version,

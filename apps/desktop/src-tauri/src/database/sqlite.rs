@@ -1,9 +1,4 @@
 //! SQLite database connection layer.
-//!
-//! Responsibilities:
-//! - Open the StorageAI database
-//! - Create the database if it does not exist
-//! - Initialize the database schema
 
 use rusqlite::{Connection, Result};
 
@@ -23,11 +18,7 @@ fn initialize_database(connection: &Connection) -> Result<()> {
         PRAGMA foreign_keys = ON;
         PRAGMA journal_mode = WAL;
         PRAGMA synchronous = NORMAL;
-        ",
-    )?;
 
-    connection.execute_batch(
-        "
         CREATE TABLE IF NOT EXISTS scan_sessions (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             started_at      TEXT NOT NULL,
@@ -39,25 +30,21 @@ fn initialize_database(connection: &Connection) -> Result<()> {
             skipped         INTEGER NOT NULL DEFAULT 0,
             duration_ms     INTEGER NOT NULL DEFAULT 0
         );
-        ",
-    )?;
 
-    connection.execute_batch(
-        "
         CREATE TABLE IF NOT EXISTS file_records (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
 
             scan_session_id     INTEGER NOT NULL,
 
-            path                TEXT NOT NULL UNIQUE,
+            path                TEXT NOT NULL,
             file_name           TEXT NOT NULL,
             extension           TEXT,
 
             size                INTEGER NOT NULL,
 
-            created_at          TEXT,
-            modified_at         TEXT,
-            accessed_at         TEXT,
+            created_at          INTEGER,
+            modified_at         INTEGER,
+            accessed_at         INTEGER,
 
             is_hidden           INTEGER NOT NULL DEFAULT 0,
             is_read_only        INTEGER NOT NULL DEFAULT 0,
@@ -67,6 +54,15 @@ fn initialize_database(connection: &Connection) -> Result<()> {
                 REFERENCES scan_sessions(id)
                 ON DELETE CASCADE
         );
+
+        CREATE INDEX IF NOT EXISTS idx_file_records_path
+            ON file_records(path);
+
+        CREATE INDEX IF NOT EXISTS idx_file_records_scan
+            ON file_records(scan_session_id);
+
+        CREATE INDEX IF NOT EXISTS idx_file_records_size
+            ON file_records(size);
         ",
     )?;
 
