@@ -90,6 +90,8 @@ impl Repository {
         scan_session_id: i64,
         records: &[FileRecord],
     ) -> Result<()> {
+        println!("Bulk inserting {} records...", records.len());
+
         let tx = self.connection.transaction()?;
 
         {
@@ -115,12 +117,12 @@ impl Repository {
                 ",
             )?;
 
-            for record in records {
-                stmt.execute(params![
+            for (index, record) in records.iter().enumerate() {
+                if let Err(e) = stmt.execute(params![
                     scan_session_id,
                     record.path_string(),
-                    record.file_name,
-                    record.extension,
+                    &record.file_name,
+                    &record.extension,
                     record.size as i64,
                     record.created_timestamp(),
                     record.modified_timestamp(),
@@ -128,11 +130,22 @@ impl Repository {
                     record.is_hidden,
                     record.is_read_only,
                     record.is_symlink,
-                ])?;
+                ]) {
+                    println!(
+                        "Failed to insert record #{}",
+                        index
+                    );
+                    println!("Path: {}", record.path_string());
+                    println!("SQLite error: {}", e);
+
+                    return Err(e);
+                }
             }
         }
 
         tx.commit()?;
+
+        println!("Bulk insert committed.");
 
         Ok(())
     }

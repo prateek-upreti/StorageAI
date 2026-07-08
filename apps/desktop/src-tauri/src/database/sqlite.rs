@@ -1,10 +1,28 @@
 //! SQLite database connection layer.
 
+use std::fs;
+
+use dirs::data_local_dir;
 use rusqlite::{Connection, Result};
 
 /// Opens (or creates) the StorageAI SQLite database.
 pub fn open_database() -> Result<Connection> {
-    let connection = Connection::open("storageai.db")?;
+    let mut database_path = data_local_dir()
+        .expect("Unable to locate Local AppData");
+
+    database_path.push("StorageAI");
+
+    fs::create_dir_all(&database_path)
+        .expect("Unable to create StorageAI data directory");
+
+    database_path.push("storageai.db");
+
+    println!(
+        "StorageAI Database: {}",
+        database_path.display()
+    );
+
+    let connection = Connection::open(database_path)?;
 
     initialize_database(&connection)?;
 
