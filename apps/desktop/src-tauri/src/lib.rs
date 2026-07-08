@@ -1,5 +1,6 @@
 mod commands;
 mod constants;
+mod database;
 mod scanner;
 
 use commands::{
@@ -7,6 +8,7 @@ use commands::{
     select_folder,
     start_scan,
 };
+use database::repository::initialize_repository;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -17,6 +19,9 @@ pub fn run() {
             start_scan,
         ])
         .setup(|app| {
+            initialize_repository()
+                .expect("Failed to initialize StorageAI database");
+
             app.handle().plugin(tauri_plugin_dialog::init())?;
 
             if cfg!(debug_assertions) {
